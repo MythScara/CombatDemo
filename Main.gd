@@ -132,19 +132,24 @@ func _run_simulation() -> void:
 		
 		var actor: Combatant = null
 		
+		#TO CONNOR: YOU WERE PRETTY SPOT ON WITH THE DIAGNOSIS SO WHAT I DID WAS ADD A NEW ARRAY THAT HOLDS EVERYONE WHO IS ACTUALLY READY TO ATTACK
+		#AND THEN THEY ALL GET THEIR TICK INCREASED NORMALLY. WHAT WAS HAPPENING BEFORE WAS I WAS BREAKING THE LOOP TO EARLY AND SO B TEAM WASN'T ABLE
+		#TO EVEN INCREASE THEIR ACTION BAR UNTIL ALL OF A TEAM ATTACKED SO IT WAS REALLY UNFAIR, GOOD JOB SPOTTING THAT. ONLY THIS WHILE LOOP NEEDED CHANGE
 		while actor == null:
 			if not (_is_team_alive(team_a_combatants) and _is_team_alive(team_b_combatants)):
 				break
 				
+			var ready_actors: Array[Combatant] = []
+			
 			for c in all_combatants:
 				if c.current_health > 0:
 					c.action_bar += c.stats.speed
-					
 					if c.action_bar >= ACTION_THRESHOLD:
-						actor = c
-						break
+						ready_actors.append(c)
 			
-			if actor:
+			if not ready_actors.is_empty():
+				ready_actors.sort_custom(func(a, b): return a.action_bar > b.action_bar)
+				actor = ready_actors[0]
 				break
 				
 			await get_tree().create_timer(0.05).timeout
