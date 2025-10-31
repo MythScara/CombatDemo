@@ -30,13 +30,11 @@ var team_b_combatants: Array[Combatant] = []
 var summon_count: int = 1
 const ACTION_THRESHOLD: float = 100.0
 
-
 func _ready() -> void:
 	randomize()
 	summon_button.pressed.connect(_on_summon_button_pressed)
 	start_button.pressed.connect(_on_start_simulation_pressed)
 	_populate_selectors()
-
 
 func _populate_selectors() -> void:
 	if CharacterDatabase.characters.is_empty():
@@ -130,57 +128,66 @@ func _run_simulation() -> void:
 
 	while _is_team_alive(team_a_combatants) and _is_team_alive(team_b_combatants):
 		
-		var actor: Combatant = null
+		var ready_actors: Array[Combatant] = []
 		
-		#TO CONNOR: YOU WERE PRETTY SPOT ON WITH THE DIAGNOSIS SO WHAT I DID WAS ADD A NEW ARRAY THAT HOLDS EVERYONE WHO IS ACTUALLY READY TO ATTACK
-		#AND THEN THEY ALL GET THEIR TICK INCREASED NORMALLY. WHAT WAS HAPPENING BEFORE WAS I WAS BREAKING THE LOOP TO EARLY AND SO B TEAM WASN'T ABLE
-		#TO EVEN INCREASE THEIR ACTION BAR UNTIL ALL OF A TEAM ATTACKED SO IT WAS REALLY UNFAIR, GOOD JOB SPOTTING THAT. ONLY THIS WHILE LOOP NEEDED CHANGE
-		while actor == null:
+		while ready_actors.is_empty():
+			
 			if not (_is_team_alive(team_a_combatants) and _is_team_alive(team_b_combatants)):
 				break
 				
-			var ready_actors: Array[Combatant] = []
-			
 			for c in all_combatants:
 				if c.current_health > 0:
 					c.action_bar += c.stats.speed
+					print(str(c) + ":" + str(c.action_bar) + ":     " +str(c.team))
+					
 					if c.action_bar >= ACTION_THRESHOLD:
 						ready_actors.append(c)
 			
-			if not ready_actors.is_empty():
-				ready_actors.sort_custom(func(a, b): return a.action_bar > b.action_bar)
-				actor = ready_actors[0]
+			if ready_actors.is_empty():
+				await get_tree().create_timer(0.05).timeout
+			else:
 				break
-				
-			await get_tree().create_timer(0.05).timeout
-			
-		if actor == null:
+		
+		if not (_is_team_alive(team_a_combatants) and _is_team_alive(team_b_combatants)):
 			break
 			
-		actor.action_bar -= ACTION_THRESHOLD
+		ready_actors.sort_custom(func(a, b): return a.action_bar > b.action_bar)
 		
-		var target_team: Array[Combatant]
-		if actor.team == 0:
-			target_team = team_b_combatants
-		else:
-			target_team = team_a_combatants
-			
-		var target: Combatant = _find_random_living_target(target_team)
+		add_log_entry("--- Turn Start ---", Color.YELLOW)
 		
-		if target:
-			var damage = max(1, actor.stats.attack - target.stats.defense)
+		for actor in ready_actors:
+			if actor.current_health <= 0:
+				continue
 			
-			target.current_health -= damage
+			var target_team: Array[Combatant]
+			if actor.team == 0:
+				target_team = team_b_combatants
+			else:
+				target_team = team_a_combatants
 			
-			var team_color = Color.AQUAMARINE if actor.team == 0 else Color.LIGHT_PINK
-			add_log_entry("%s attacks %s for %d damage!" % [actor.stats.character_name, target.stats.character_name, damage], team_color)
+			if not _is_team_alive(target_team):
+				continue
+				
+			actor.action_bar -= ACTION_THRESHOLD
 			
-			if target.current_health <= 0:
-				target.current_health = 0 
-				add_log_entry("%s has been defeated!" % target.stats.character_name, Color.RED)
+			var target: Combatant = _find_random_living_target(target_team)
 			
-			_update_health_ui()
-			await get_tree().create_timer(0.5).timeout
+			if target:
+				var damage = max(1, actor.stats.attack - target.stats.defense)
+				
+				target.current_health -= damage
+				
+				var team_color = Color.AQUAMARINE if actor.team == 0 else Color.LIGHT_PINK
+				add_log_entry("%s attacks %s for %d damage!" % [actor.stats.character_name, target.stats.character_name, damage], team_color)
+				
+				if target.current_health <= 0:
+					target.current_health = 0 
+					add_log_entry("%s has been defeated!" % target.stats.character_name, Color.RED)
+				
+				_update_health_ui()
+				await get_tree().create_timer(0.5).timeout
+		
+		add_log_entry("--- Turn End ---", Color.YELLOW)
 			
 	if _is_team_alive(team_a_combatants):
 		add_log_entry("--- TEAM A WINS! ---", Color.GOLD)
